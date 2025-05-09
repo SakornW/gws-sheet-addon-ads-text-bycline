@@ -1,10 +1,8 @@
 {
   "oauthScopes": [
-    "https://www.googleapis.com/auth/script.container.ui",
-    "https://www.googleapis.com/auth/spreadsheets.currentonly",
-    "https://www.googleapis.com/auth/script.external_request",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/script.locale",
+    "https://www.googleapis.com/auth/spreadsheets.currentonly",
     "https://www.googleapis.com/auth/spreadsheets.readonly"
   ],
   "addOns": {
@@ -17,17 +15,19 @@
       },
       "useLocaleFromApp": true,
       "homepageTrigger": {
-        "runFunction": "https://<YOUR_BACKEND_URL>/gws/homepage",
+        "runFunction": "http://35.226.139.34:8000/gws/homepage",
         "enabled": true
       },
       "universalActions": []
     },
     "sheets": {
       "onFileScopeGrantedTrigger": {
-        "runFunction": "https://<YOUR_BACKEND_URL>/gws/onFileScopeGranted"
-      },
-      "contextualTriggers": []
+        "runFunction": "http://35.226.139.34:8000/gws/onFileScopeGranted"
+      }
+    },
+    "httpOptions": {
+      "authorizationHeader": "SYSTEM_ID_TOKEN",
+      "granularOauthPermissionSupport": "OPT_IN"
     }
-  },
-  "schemaVersion": "v1"
+  }
 }

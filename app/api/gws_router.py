@@ -76,6 +76,9 @@ async def on_homepage(
 
     # For now, return a simple card structure.
     # This should be built using a helper function or a Card Builder utility.
+
+    logger.info(f"on_homepage called with request_body: {request_body}")  # Log the request body
+
     card_json = {
         "action": {
             "navigations": [
