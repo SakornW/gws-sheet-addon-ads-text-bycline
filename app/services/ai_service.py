@@ -2,28 +2,19 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
-import google.generativeai as genai
-# Removed GenerateContentConfig as it's not directly used with GenerativeModel.generate_content_async in this way
-from google.generativeai.types import HarmBlockThreshold, HarmCategory, Tool
-
-# Corrected import for GoogleSearch based on typical SDK structure
-# If this specific path is wrong, the linter or runtime will tell us.
-# The example used `from google.genai.types import GoogleSearch`, assuming `genai` was `from google import genai`.
-# With `import google.generativeai as genai`, it's likely under `genai.types` or a sub-module.
-# Let's try a common pattern, if it fails, we'll adjust.
-try:
-    from google.generativeai.types import GoogleSearch
-except ImportError:
-    from google.generativeai.types.content_types import GoogleSearch  # Fallback path
-
+from google import genai  # New SDK import
+from google.genai import types  # New SDK types import
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
 from app.db.models import Product
 
+# Note: HarmCategory, HarmBlockThreshold, Tool, GenerateContentConfig, GoogleSearch are expected to be in google.genai.types
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# Initialize the client as per the new SDK, passing the API key explicitly
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
 PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 
 
@@ -33,21 +24,21 @@ def load_prompt_template(template_name: str) -> str:
             return f.read()
     except FileNotFoundError:
         logger.error(f"Prompt template '{template_name}' not found in {PROMPT_DIR}")
-        return "Error: Prompt template not found."  # Or raise a custom exception
+        return "Error: Prompt template not found."
 
 
 # Safety settings for generation - adjust as needed
+# Assuming HarmCategory and HarmBlockThreshold are correctly found in types
 SAFETY_SETTINGS = {
-    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    types.HarmCategory.HARM_CATEGORY_HARASSMENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
 }
 
 
-# Initialize the Google Search tool as per the example
-# The empty dict for schema implies default behavior or no specific input schema from our side.
-google_search_tool = Tool(google_search=GoogleSearch(input_schema={}))
+# Initialize the Google Search tool as per the new documentation
+google_search_tool = types.Tool(google_search=types.GoogleSearch())
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -66,12 +57,10 @@ async def generate_ad_text_with_search(
         }
 
         prompt_template_str = load_prompt_template("ad_generation_template.txt")
-        if "Error: Prompt template not found." in prompt_template_str:  # Check if loading failed
+        if "Error: Prompt template not found." in prompt_template_str:
             logger.error("Ad generation failed: prompt template not found.")
             return "Error: Ad generation setup issue. Please contact support."
 
-        # The template no longer needs an explicit search_query to be formatted in.
-        # The model will use the product details to inform its search via the tool.
         prompt = prompt_template_str.format(
             platform=platform,
             tone=tone,
@@ -82,53 +71,57 @@ async def generate_ad_text_with_search(
             product_cta_link=product_info['cta_link']
         )
 
-        # Using GenerativeModel and passing tools to generate_content_async
-        # The model ID might need to be one that explicitly supports grounding well,
-        # e.g., 'gemini-1.5-flash-latest' or 'gemini-1.0-pro' (if it supports tools this way).
-        # The example used "gemini-2.0-flash" with a client, which might be different.
-        # We'll use 'gemini-pro' as initially planned and see.
-        model = genai.GenerativeModel(
-            model_name='gemini-pro',
-            safety_settings=SAFETY_SETTINGS
-            # Tools are often passed to generate_content_async rather than model init
+        # Using the new SDK's client.aio.models.generate_content for async
+        # Using 'gemini-2.0-flash' as per the "Search grounding" example with the new SDK
+        model_name_for_tools = 'gemini-2.0-flash'  # Or another model known to work well with tools in the new SDK
+
+        logger.info(f"Generating ad for: {product.name} using model {model_name_for_tools} with grounding. Prompt (first 200): {prompt[:200]}")
+
+        generation_config = types.GenerateContentConfig(
+            tools=[google_search_tool],
+            safety_settings=SAFETY_SETTINGS  # Pass safety settings here
+            # response_modalities=["TEXT"]  # Optional, from grounding example
         )
 
-        logger.info(f"Generating ad for: {product.name} using grounding. Prompt (first 200): {prompt[:200]}")
-
-        # Pass the tool to the generation call
-        response = await model.generate_content_async(
-            prompt,
-            tools=[google_search_tool]  # Pass the configured tool here
+        # The `contents` argument should be the prompt directly
+        response = await client.aio.models.generate_content(
+            model=f'models/{model_name_for_tools}',  # Model name often prefixed with 'models/'
+            contents=prompt,  # Pass the prompt string directly
+            generation_config=generation_config  # Pass the config object
         )
 
         ad_text = ""
-        # Standard way to get text from response, assuming it's not a function call response
         if response.parts:
             ad_text = "".join(part.text for part in response.parts if hasattr(part, 'text')).strip()
-        elif hasattr(response, 'text') and response.text:  # Fallback for simpler text responses
+        elif hasattr(response, 'text') and response.text:
             ad_text = response.text.strip()
-        else:  # Check candidates if primary text extraction fails
+        else:
             logger.warning(f"Primary text extraction failed for {product.name}. Checking candidates. Response: {response}")
             if response.candidates and response.candidates[0].content.parts:
                 ad_text = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text')).strip()
 
         if not ad_text:
             logger.error(f"Failed to generate ad text for {product.name}. Response: {response}")
-            # Check for blocked response due to safety
             if response.prompt_feedback and response.prompt_feedback.block_reason:
                 logger.error(f"Prompt blocked for {product.name}. Reason: {response.prompt_feedback.block_reason_message}")
                 return f"Ad generation blocked due to: {response.prompt_feedback.block_reason_message}"
+            # Check for finish_reason in candidates if available
+            if response.candidates and response.candidates[0].finish_reason:
+                finish_reason_str = types.FinishReason(response.candidates[0].finish_reason).name
+                logger.error(f"Generation finished for {product.name} with reason: {finish_reason_str}")
+                if response.candidates[0].finish_reason != types.FinishReason.STOP:  # Not a normal stop
+                    return f"Ad generation failed for {product.name}. Reason: {finish_reason_str}"
             raise ValueError("Failed to generate ad text, response was empty or malformed.")
 
         logger.info(f"Generated ad for {product.name}: {ad_text}")
 
-        # Log grounding metadata
         if response.candidates and response.candidates[0].grounding_metadata:
             metadata = response.candidates[0].grounding_metadata
-            if metadata.web_search_queries:  # Check if this attribute exists
+            if hasattr(metadata, 'web_search_queries') and metadata.web_search_queries:
                 logger.info(f"Grounding web_search_queries for {product.name}: {metadata.web_search_queries}")
-            elif hasattr(metadata, 'search_entry_point') and metadata.search_entry_point:  # Check alternative attribute
-                logger.info(f"Grounding search_entry_point query for {product.name}: {metadata.search_entry_point.rendered_query if hasattr(metadata.search_entry_point, 'rendered_query') else 'N/A'}")
+            elif hasattr(metadata, 'search_entry_point') and metadata.search_entry_point:
+                rendered_query = getattr(metadata.search_entry_point, 'rendered_query', 'N/A')
+                logger.info(f"Grounding search_entry_point query for {product.name}: {rendered_query}")
 
         if len(ad_text) > max_length:
             ad_text = ad_text[:max_length - 3] + "..."

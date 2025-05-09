@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import gws_router  # Import the new GWS router
-from app.api import auth, endpoints
+from app.api import auth
 
 # from app.core.config import settings  # Commented out for now as unused
 
@@ -19,7 +19,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
-app.include_router(endpoints.router, prefix="/api/v1", tags=["endpoints"])
 app.include_router(gws_router.router)  # Add the GWS router
 
 

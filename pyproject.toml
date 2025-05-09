@@ -17,7 +17,7 @@ dependencies = [
     "email-validator>=2.0.0", # For pydantic EmailStr
     "python-jose[cryptography]>=3.3.0", # For JWT
     "passlib[bcrypt]>=1.7.4", # For password hashing
-    "google-generativeai>=0.4.0", # For Gemini and its tools (ensure it includes search)
+    "google-genai", # For new Gemini SDK
     "google-auth>=2.20.0", # For verifying Google ID tokens
     "python-dotenv>=1.0.0", # For .env file loading
     "aiohttp>=3.8.4", # For async HTTP requests (might still be useful)
