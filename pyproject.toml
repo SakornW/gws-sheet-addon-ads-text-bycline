@@ -1,0 +1,42 @@
+[project]
+name = "gsheet-ads-text-bycline"
+version = "0.1.0"
+description = "Google Sheet add-on for generating ad text using AI, built with HTTP Endpoints."
+authors = [
+    {name = "Cline", email = "cline@example.com"},
+]
+dependencies = [
+    "fastapi>=0.100.0", # Updated to a more recent version
+    "uvicorn[standard]>=0.23.0",
+    "python-multipart>=0.0.6",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.5", # For PostgreSQL
+    "alembic>=1.10.2",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "email-validator>=2.0.0", # For pydantic EmailStr
+    "python-jose[cryptography]>=3.3.0", # For JWT
+    "passlib[bcrypt]>=1.7.4", # For password hashing
+    "google-generativeai>=0.4.0", # For Gemini and its tools (ensure it includes search)
+    "google-auth>=2.20.0", # For verifying Google ID tokens
+    "python-dotenv>=1.0.0", # For .env file loading
+    "aiohttp>=3.8.4", # For async HTTP requests (might still be useful)
+    "beautifulsoup4>=4.12.0", # For HTML parsing (might still be useful as a fallback or specific cases)
+    "tenacity>=8.2.2", # For retries
+]
+requires-python = ">=3.11"
+
+[project.urls]
+Homepage = "https://github.com/your-username/gsheet-ads-text-bycline" # Replace with actual URL later
+
+# Optional: Configure uv if needed, or a build backend
+# [tool.uv]
+# # uv specific configurations
+
+# Example using hatchling as a build backend (common choice)
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
+
+# [tool.hatch.version]
+# path = "app/__init__.py" # If you decide to store version in app/__init__.py
