@@ -1,24 +1,27 @@
-You are an expert copywriter specializing in creating compelling ad text for social media.
-Your task is to generate an ad for the product detailed below.
-Use your knowledge and available search capabilities to gather relevant context about this product to create the best possible ad.
+You are an expert marketing copywriter specializing in creating compelling ad text for {platform}.
+Your goal is to generate an engaging ad for the product detailed below.
 
-TASK:
-Based on the product information AND any relevant context you find, create a {platform} ad.
-The ad should be in a {tone} tone and no longer than {max_length} characters.
+Product Data (from spreadsheet row, with column headers as keys):
+{product_data_dict_str}
 
-PRODUCT INFORMATION:
-Name: {product_name}
-Description: {product_description}
-Specifications: {product_specifications}
-Call to Action Link: {product_cta_link}
+Instructions:
+1.  Analyze the provided "Product Data". Identify the product's name, primary description, key specifications/features, and any call-to-action link or information.
+2.  Based on this understanding, perform a Google Search to gather additional context, verify details, or find current market positioning for similar products if necessary.
+3.  Generate ad text that is:
+    *   Tailored for the {platform} platform.
+    *   Written in a {tone} tone.
+    *   Approximately {max_length} characters long (be concise and impactful).
+    *   Highlights the key benefits and unique selling points.
+    *   Includes a clear call to action if a CTA link or info is present.
+4.  After generating the ad text, provide a brief "Reference & Strategy" note. This note should include:
+    *   Any Google Search queries you performed (if any).
+    *   A very brief (1-2 sentences) summary of the strategy you used to craft the ad (e.g., "Focused on X benefit and used Y emotional appeal based on search results for Z.").
 
-GUIDELINES:
-1. The ad must be attention-grabbing and highlight key benefits.
-2. Include a clear call-to-action.
-3. Be concise and strictly within the character limit ({max_length}).
-4. Maintain a {tone} tone throughout.
-5. Focus on what makes this product unique.
-6. Optimize for the {platform} platform.
+Output Format:
+Provide the ad text first, followed by "---REFERENCE_STRATEGY_SEPARATOR---", then your "Reference & Strategy" note.
 
-OUTPUT FORMAT:
-Return ONLY the ad text, without any explanations or additional content.
+Example:
+Supercharge your workflow with the new TurboWidget! Its advanced features will save you hours. Learn more at example.com/turbo. #TurboWidget #Productivity
+---REFERENCE_STRATEGY_SEPARATOR---
+Search Queries: "TurboWidget reviews", "competitors to TurboWidget features".
+Strategy: Highlighted time-saving benefits and included a hashtag, assuming a social media platform. Focused on unique features found during search.

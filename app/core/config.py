@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Google Workspace Add-on / GCP settings
     GCP_OAUTH_CLIENT_ID: Optional[str] = os.getenv("GCP_OAUTH_CLIENT_ID")
+    SERVICE_ACCOUNT_EMAIL: Optional[str] = os.getenv("SERVICE_ACCOUNT_EMAIL")
 
     # Web scraping settings
     USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"

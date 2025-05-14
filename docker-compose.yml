@@ -3,10 +3,8 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/adstext
-      - GEMINI_API_KEY=AIzaSyBycCVSjT9L2mHvUkpu-hTNtvHO4GEHXaE
-      - SECRET_KEY=your-secret-key-here
+    env_file:
+      - .env
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts

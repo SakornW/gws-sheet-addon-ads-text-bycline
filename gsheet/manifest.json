@@ -3,26 +3,27 @@
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/script.locale",
     "https://www.googleapis.com/auth/spreadsheets.currentonly",
-    "https://www.googleapis.com/auth/spreadsheets.readonly"
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file"
   ],
   "addOns": {
     "common": {
       "name": "Ads Text Generator (HTTP)",
-      "logoUrl": "https://www.gstatic.com/images/icons/material/system/1x/extension_white_24dp.png",
+      "logoUrl": "https://www.gstatic.com/images/icons/material/system/1x/history_edu_black_48dp.png",
       "layoutProperties": {
         "primaryColor": "#2772E4",
         "secondaryColor": "#F2F6FF"
       },
       "useLocaleFromApp": true,
-      "homepageTrigger": {
-        "runFunction": "http://35.226.139.34:8000/gws/homepage",
-        "enabled": true
-      },
       "universalActions": []
     },
     "sheets": {
+      "homepageTrigger": {
+        "runFunction": "https://6a06-61-90-26-216.ngrok-free.app/gws/homepage",
+        "enabled": true
+      },
       "onFileScopeGrantedTrigger": {
-        "runFunction": "http://35.226.139.34:8000/gws/onFileScopeGranted"
+        "runFunction": "https://6a06-61-90-26-216.ngrok-free.app/gws/onFileScopeGranted"
       }
     },
     "httpOptions": {

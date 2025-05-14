@@ -1,20 +1,17 @@
+import json
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
-from google import genai  # New SDK import
-from google.genai import types  # New SDK types import
+from google import genai
+from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
-from app.db.models import Product
 
-# Note: HarmCategory, HarmBlockThreshold, Tool, GenerateContentConfig, GoogleSearch are expected to be in google.genai.types
 logger = logging.getLogger(__name__)
 
-# Initialize the client as per the new SDK, passing the API key explicitly
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
 PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 
 
@@ -27,8 +24,6 @@ def load_prompt_template(template_name: str) -> str:
         return "Error: Prompt template not found."
 
 
-# Safety settings for generation - adjust as needed
-# Assuming HarmCategory and HarmBlockThreshold are correctly found in types
 SAFETY_SETTINGS = {
     types.HarmCategory.HARM_CATEGORY_HARASSMENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
     types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
@@ -36,121 +31,125 @@ SAFETY_SETTINGS = {
     types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
 }
 
-
-# Initialize the Google Search tool as per the new documentation
 google_search_tool = types.Tool(google_search=types.GoogleSearch())
+
+AD_TEXT_FALLBACK = "Could not generate ad text. Please check product details or try again later."
+REFERENCE_FALLBACK = "No reference strategy available."
+RESPONSE_SEPARATOR = "---REFERENCE_STRATEGY_SEPARATOR---"
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 async def generate_ad_text_with_search(
-    product: Product,
+    product_row_data: Dict[str, str],  # Input is now just the row data
     tone: str = "Professional",
     max_length: int = 150,
     platform: str = "Facebook"
-) -> str:
+) -> Tuple[str, str]:
+    # Try to find a product name for logging, otherwise use a generic placeholder
+    product_name_for_log = product_row_data.get("Product Name", product_row_data.get("Name", "Unknown Product from Row"))
+
     try:
-        product_info = {
-            "name": product.name,
-            "description": product.description or "",
-            "specifications": product.specifications or "",
-            "cta_link": product.cta_link or ""
-        }
+        product_data_dict_str = json.dumps(product_row_data, indent=2)
 
         prompt_template_str = load_prompt_template("ad_generation_template.txt")
         if "Error: Prompt template not found." in prompt_template_str:
-            logger.error("Ad generation failed: prompt template not found.")
-            return "Error: Ad generation setup issue. Please contact support."
+            logger.error(f"Ad generation failed for {product_name_for_log}: prompt template not found.")
+            return AD_TEXT_FALLBACK, REFERENCE_FALLBACK
 
         prompt = prompt_template_str.format(
             platform=platform,
             tone=tone,
             max_length=max_length,
-            product_name=product_info['name'],
-            product_description=product_info['description'],
-            product_specifications=product_info['specifications'],
-            product_cta_link=product_info['cta_link']
+            product_data_dict_str=product_data_dict_str
         )
 
-        # Using the new SDK's client.aio.models.generate_content for async
-        # Using 'gemini-2.0-flash' as per the "Search grounding" example with the new SDK
-        model_name_for_tools = 'gemini-2.0-flash'  # Or another model known to work well with tools in the new SDK
+        model_name_for_tools = 'gemini-1.5-flash-latest'  # Using a model known for tool use and good with grounding
 
-        logger.info(f"Generating ad for: {product.name} using model {model_name_for_tools} with grounding. Prompt (first 200): {prompt[:200]}")
+        logger.info(f"Generating ad for: {product_name_for_log} using model {model_name_for_tools}. Prompt (first 300 chars): {prompt[:300]}")
 
         generation_config = types.GenerateContentConfig(
             tools=[google_search_tool],
-            safety_settings=SAFETY_SETTINGS  # Pass safety settings here
-            # response_modalities=["TEXT"]  # Optional, from grounding example
+            safety_settings=SAFETY_SETTINGS
         )
 
-        # The `contents` argument should be the prompt directly
         response = await client.aio.models.generate_content(
-            model=f'models/{model_name_for_tools}',  # Model name often prefixed with 'models/'
-            contents=prompt,  # Pass the prompt string directly
-            generation_config=generation_config  # Pass the config object
+            model=f'models/{model_name_for_tools}',
+            contents=prompt,
+            generation_config=generation_config
         )
 
-        ad_text = ""
+        full_response_text = ""
         if response.parts:
-            ad_text = "".join(part.text for part in response.parts if hasattr(part, 'text')).strip()
+            full_response_text = "".join(part.text for part in response.parts if hasattr(part, 'text')).strip()
         elif hasattr(response, 'text') and response.text:
-            ad_text = response.text.strip()
+            full_response_text = response.text.strip()
         else:
-            logger.warning(f"Primary text extraction failed for {product.name}. Checking candidates. Response: {response}")
+            logger.warning(f"Primary text extraction failed for {product_name_for_log}. Checking candidates. Response: {response}")
             if response.candidates and response.candidates[0].content.parts:
-                ad_text = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text')).strip()
+                full_response_text = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text')).strip()
 
-        if not ad_text:
-            logger.error(f"Failed to generate ad text for {product.name}. Response: {response}")
+        if not full_response_text:
+            logger.error(f"Failed to generate ad text for {product_name_for_log}. Response: {response}")
             if response.prompt_feedback and response.prompt_feedback.block_reason:
-                logger.error(f"Prompt blocked for {product.name}. Reason: {response.prompt_feedback.block_reason_message}")
-                return f"Ad generation blocked due to: {response.prompt_feedback.block_reason_message}"
-            # Check for finish_reason in candidates if available
+                reason_msg = response.prompt_feedback.block_reason_message or "Safety block"
+                logger.error(f"Prompt blocked for {product_name_for_log}. Reason: {reason_msg}")
+                return f"Ad generation blocked: {reason_msg}", REFERENCE_FALLBACK
             if response.candidates and response.candidates[0].finish_reason:
-                finish_reason_str = types.FinishReason(response.candidates[0].finish_reason).name
-                logger.error(f"Generation finished for {product.name} with reason: {finish_reason_str}")
-                if response.candidates[0].finish_reason != types.FinishReason.STOP:  # Not a normal stop
-                    return f"Ad generation failed for {product.name}. Reason: {finish_reason_str}"
-            raise ValueError("Failed to generate ad text, response was empty or malformed.")
+                finish_reason_val = response.candidates[0].finish_reason
+                finish_reason_str = types.FinishReason(finish_reason_val).name if isinstance(finish_reason_val, int) else str(finish_reason_val)
+                logger.error(f"Generation finished for {product_name_for_log} with reason: {finish_reason_str}")
+                if finish_reason_val != types.FinishReason.STOP:
+                    return f"Ad generation failed: {finish_reason_str}", REFERENCE_FALLBACK
+            return AD_TEXT_FALLBACK, REFERENCE_FALLBACK
 
-        logger.info(f"Generated ad for {product.name}: {ad_text}")
+        if RESPONSE_SEPARATOR in full_response_text:
+            ad_text, reference_strategy = full_response_text.split(RESPONSE_SEPARATOR, 1)
+            ad_text = ad_text.strip()
+            reference_strategy = reference_strategy.strip()
+        else:
+            ad_text = full_response_text.strip()
+            reference_strategy = REFERENCE_FALLBACK
+            logger.warning(f"Response for {product_name_for_log} did not contain separator. Full response used as ad text.")
 
-        if response.candidates and response.candidates[0].grounding_metadata:
+        logger.info(f"Generated ad for {product_name_for_log}: {ad_text}")
+        logger.info(f"Reference/Strategy for {product_name_for_log}: {reference_strategy}")
+
+        if response.candidates and hasattr(response.candidates[0], 'grounding_metadata') and response.candidates[0].grounding_metadata:
             metadata = response.candidates[0].grounding_metadata
             if hasattr(metadata, 'web_search_queries') and metadata.web_search_queries:
-                logger.info(f"Grounding web_search_queries for {product.name}: {metadata.web_search_queries}")
+                logger.info(f"Grounding web_search_queries for {product_name_for_log}: {metadata.web_search_queries}")
             elif hasattr(metadata, 'search_entry_point') and metadata.search_entry_point:
                 rendered_query = getattr(metadata.search_entry_point, 'rendered_query', 'N/A')
-                logger.info(f"Grounding search_entry_point query for {product.name}: {rendered_query}")
+                logger.info(f"Grounding search_entry_point query for {product_name_for_log}: {rendered_query}")
 
-        if len(ad_text) > max_length:
-            ad_text = ad_text[:max_length - 3] + "..."
-
-        return ad_text
+        return ad_text, reference_strategy
 
     except Exception as e:
-        logger.error(f"Error in generate_ad_text_with_search for {product.name}: {e}", exc_info=True)
-        return f"Discover {product.name}! Visit {product.cta_link or 'our website'} to learn more."
+        logger.error(f"Error in generate_ad_text_with_search for {product_name_for_log}: {e}", exc_info=True)
+        return AD_TEXT_FALLBACK, f"Error during generation: {str(e)}"
 
 
 async def generate_batch_ads_with_search(
-    products: List[Product],
+    products_data: List[Dict[str, str]],  # List of product row data dicts
     tone: str = "Professional",
     max_length: int = 150,
     platform: str = "Facebook"
-) -> Dict[int, str]:
-    results = {}
-    for product in products:
+) -> List[Tuple[str, str]]:  # Returns a list of (ad_text, reference_strategy) tuples
+    results = []
+    for product_row in products_data:
         try:
-            ad_text = await generate_ad_text_with_search(
-                product=product,
+            # For logging within generate_ad_text_with_search, it will try to find a name.
+            # No need to pass product_name_header_key anymore.
+            ad_text, reference_strategy = await generate_ad_text_with_search(
+                product_row_data=product_row,
                 tone=tone,
                 max_length=max_length,
                 platform=platform
             )
-            results[product.id] = ad_text
+            results.append((ad_text, reference_strategy))
         except Exception as e:
-            logger.error(f"Failed to generate ad for product ID {product.id} ({product.name}) in batch: {e}")
-            results[product.id] = f"Error generating ad for {product.name}. Please try again."
-
+            # Attempt to get a product name for logging, if possible from the row data
+            product_name_for_log_batch = product_row.get("Product Name", product_row.get("Name", "Unknown Product in Batch"))
+            logger.error(f"Failed to generate ad for product '{product_name_for_log_batch}' in batch: {e}", exc_info=True)
+            results.append((AD_TEXT_FALLBACK, f"Batch processing error: {str(e)}"))
     return results
