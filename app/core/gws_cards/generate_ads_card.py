@@ -59,7 +59,9 @@ def create_generate_ads_card(base_url: str) -> Dict[str, Any]:
                                             "name": "max_length",
                                             "label": "Max Ad Length",
                                             "value": "150",
-                                            "type": "NUMBER"
+                                            "validation": {
+                                                    "inputType": "INTEGER"
+                                            }
                                         }
                                     }
                                 ]

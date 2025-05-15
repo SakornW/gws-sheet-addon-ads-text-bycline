@@ -2,7 +2,6 @@
   "oauthScopes": [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/script.locale",
-    "https://www.googleapis.com/auth/spreadsheets.currentonly",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.file"
   ],
@@ -19,11 +18,11 @@
     },
     "sheets": {
       "homepageTrigger": {
-        "runFunction": "https://6a06-61-90-26-216.ngrok-free.app/gws/homepage",
+        "runFunction": "https://9a2f-61-90-19-70.ngrok-free.app/gws/homepage",
         "enabled": true
       },
       "onFileScopeGrantedTrigger": {
-        "runFunction": "https://6a06-61-90-26-216.ngrok-free.app/gws/onFileScopeGranted"
+        "runFunction": "https://9a2f-61-90-19-70.ngrok-free.app/gws/onFileScopeGranted"
       }
     },
     "httpOptions": {
