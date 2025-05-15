@@ -37,5 +37,16 @@ services:
       - "5432:5432"
     restart: unless-stopped
 
+  # Not working. Need to run separately as docker >> "docker run --net=host -it -e NGROK_AUTHTOKEN=2wr3bj7pjiv2Zp7TiqhDSwaqcV8_5CPCTrokxhePA5pNJZ6zQ ngrok/ngrok:latest http 8000"
+  # ngrok:
+  #   image: ngrok/ngrok:latest
+  #   network_mode: host
+  #   environment:
+  #     - NGROK_AUTHTOKEN=2wr3bj7pjiv2Zp7TiqhDSwaqcV8_5CPCTrokxhePA5pNJZ6zQ
+  #   command: http 8000
+  #   stdin_open: true
+  #   tty: true
+
+
 volumes:
   postgres_data:
